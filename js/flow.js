@@ -3,10 +3,14 @@
 // through a server that stores it but can't read it. Afterwards the visitor can send their own.
 import { createRsaKeyPair, createWrappedKey, unwrapKey, encryptText, decryptText, hex } from './crypto.js';
 
-const HOP_MS = 1000;      // one packet hop between two boxes
-const PLAY_STEP_MS = 3000; // "Play all": time per step, including its animation
+const HOP_MS = 1000;       // one packet hop between two boxes, when stepping by hand
+const PLAY_HOP_MS = 550;   // faster hops during "Play all"
+const PLAY_STEP_MS = 1800; // "Play all": time per step, including its animation
 const DEMO_TEXT = 'Hi Bob, lunch at 1?';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Thrown inside a step when Reset (or a newer run) made it out of date. Never shown to the user.
+class Stale extends Error {}
 
 export function initFlow(root) {
   if (!root) return;
@@ -30,6 +34,7 @@ export function initFlow(root) {
     next: $('[data-action="next"]'),
     play: $('[data-action="play"]'),
     reset: $('[data-action="reset"]'),
+    send: compose.querySelector('button[type="submit"]'),
   };
   const inspector = { len: $('[data-len]'), cipher: $('[data-cipher]'), title: $('.inspector-title') };
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -42,12 +47,25 @@ export function initFlow(root) {
   };
 
   let step = 0;          // 0 = not started, 1..6 = step shown
-  let busy = false;      // an animation is running
+  let busy = false;      // a step (or "send your own") is running
   let playing = false;   // "Play all" is on
   let playId = 0;        // identifies the current "Play all" loop
-  let run = 0;           // bumped on every reset, so old animations stop
+  let run = 0;           // bumped on every reset, so older work stops
   let data = {};         // crypto results, made once and reused when stepping back
   let rsaPromise = null; // Bob's RSA key pair, made once on first use
+
+  // Everything a step needs. check() throws Stale if Reset happened since the step began,
+  // and is called after every await, before touching data or the page.
+  function context(animate) {
+    const myRun = run;
+    return {
+      animate,
+      d: data, // this run's data object, even if Reset replaces `data` meanwhile
+      fast: playing,
+      stale: () => myRun !== run,
+      check() { if (myRun !== run) throw new Stale(); },
+    };
+  }
 
   // ---------- small helpers ----------
   const note = (key, html) => { nodes[key].querySelector('[data-note]').innerHTML = html; };
@@ -84,13 +102,12 @@ export function initFlow(root) {
   }
 
   // Move the packet from one box to the next, lighting up both boxes and the wire between.
-  // With animate = false (stepping back) it only sets the highlight.
-  async function hop(from, to, label, kind, animate) {
+  // With ctx.animate = false (stepping back) it only sets the highlight.
+  async function hop(from, to, label, kind, ctx) {
     const wireKey = [from, to].includes('a') ? 'ab' : 'bc';
     highlight(from, wireKey, to);
-    if (!animate) return;
+    if (!ctx.animate) return;
 
-    const myRun = run;
     packetLabel.textContent = label;
     packet.classList.toggle('rsa', kind === 'rsa');
     wires[wireKey].classList.add('active');
@@ -108,96 +125,117 @@ export function initFlow(root) {
         { opacity: 1, offset: 0.85 },
         { transform: at(p1), opacity: 0 },
       ],
-      { duration: reduced.matches ? 1 : HOP_MS, easing: 'cubic-bezier(.65,0,.35,1)', fill: 'forwards' }
+      {
+        duration: reduced.matches ? 1 : ctx.fast ? PLAY_HOP_MS : HOP_MS,
+        easing: 'cubic-bezier(.65,0,.35,1)',
+        fill: 'forwards',
+      }
     );
-    await anim.finished.catch(() => {});
+    await anim.finished.catch(() => {}); // cancelled by Reset: check() below stops us
+    ctx.check();
     wires[wireKey].classList.remove('active');
-    if (myRun !== run) throw new Error('reset'); // Reset was pressed mid-animation
-    await pause(250);
+    await pause(ctx.fast ? 120 : 250);
+    ctx.check();
   }
 
   // ---------- the six steps ----------
-  // Each step applies its changes on top of the previous one. "animate" is false
+  // Each step applies its changes on top of the previous one. ctx.animate is false
   // when we rebuild an earlier step after pressing Back.
   const steps = [
     {
       caption: 'Alice asks the server for Bob\'s public key.',
-      async run(animate) {
-        data.bobKeys ??= await (rsaPromise ??= createRsaKeyPair());
-        addLog('Alice → Server: <b>602</b> give me Bob\'s public key', animate);
-        await hop('a', 's', '602 · pub key?', 'rsa', animate);
+      async run(ctx) {
+        const keys = await (rsaPromise ??= createRsaKeyPair());
+        ctx.check();
+        ctx.d.bobKeys ??= keys;
+        addLog('Alice → Server: <b>602</b> give me Bob\'s public key', ctx.animate);
+        await hop('a', 's', '602 · pub key?', 'rsa', ctx);
         note('s', 'Looks up Bob and sends back his public key.');
-        await hop('s', 'a', '2102 · Bob\'s pub key', 'rsa', animate);
-        addLog('Server → Alice: <b>2102</b> Bob\'s RSA public key', animate);
+        await hop('s', 'a', '2102 · Bob\'s pub key', 'rsa', ctx);
+        addLog('Server → Alice: <b>2102</b> Bob\'s RSA public key', ctx.animate);
         note('a', 'Got Bob\'s <strong>RSA public key</strong>.');
       },
     },
     {
       caption: 'Alice creates a random AES key and locks it with Bob\'s RSA public key.',
-      async run(animate) {
+      async run(ctx) {
         highlight('a');
-        data.key ??= await createWrappedKey(data.bobKeys);
+        const key = ctx.d.key ?? await createWrappedKey(ctx.d.bobKeys);
+        ctx.check();
+        ctx.d.key = key;
         showAes('a');
         note('a', 'Made a random <strong>AES-128</strong> key and locked it with Bob\'s public key.');
-        addLog(`Alice locks a new AES key with RSA-OAEP → ${data.key.wrapped.length} B`, animate);
+        addLog(`Alice locks a new AES key with RSA-OAEP → ${key.wrapped.length} B`, ctx.animate);
       },
     },
     {
       caption: 'The server stores the locked key, but it can\'t open it.',
-      async run(animate) {
-        setInspector(2, data.key.wrapped);
-        addLog('Alice → Server: <b>603</b> type 2 (symmetric key)', animate);
-        await hop('a', 's', '603 · 🔒 RSA', 'rsa', animate);
+      async run(ctx) {
+        const { wrapped } = ctx.d.key;
+        setInspector(2, wrapped);
+        addLog('Alice → Server: <b>603</b> type 2 (symmetric key)', ctx.animate);
+        await hop('a', 's', '603 · 🔒 RSA', 'rsa', ctx);
         highlight('s');
-        note('s', `Stored for Bob:<br><strong>${hex(data.key.wrapped, 8)}</strong><br><span class="lock">No private key, can't open it.</span>`);
-        addLog('Server → Alice: <b>2103</b> stored', animate);
+        note('s', `Stored for Bob:<br><strong>${hex(wrapped, 8)}</strong><br><span class="lock">No private key, can't open it.</span>`);
+        addLog('Server → Alice: <b>2103</b> stored', ctx.animate);
       },
     },
     {
       caption: 'Bob pulls his messages and unlocks the AES key with his private RSA key.',
-      async run(animate) {
-        addLog('Bob → Server: <b>604</b> any waiting messages?', animate);
-        await hop('b', 's', '604 · inbox?', 'rsa', animate);
-        await hop('s', 'b', '2104 · 🔒 RSA', 'rsa', animate);
-        data.aesB ??= await unwrapKey(data.bobKeys, data.key.wrapped, data.key.raw);
+      async run(ctx) {
+        addLog('Bob → Server: <b>604</b> any waiting messages?', ctx.animate);
+        await hop('b', 's', '604 · inbox?', 'rsa', ctx);
+        await hop('s', 'b', '2104 · 🔒 RSA', 'rsa', ctx);
+        const aesB = ctx.d.aesB ?? await unwrapKey(ctx.d.bobKeys, ctx.d.key.wrapped, ctx.d.key.raw);
+        ctx.check();
+        ctx.d.aesB = aesB;
         highlight('b');
         showAes('b');
         note('s', 'Forwarded it. It never saw the AES key.');
         note('b', 'Unlocked the AES key with his <strong>RSA private key</strong>.');
-        addLog('Bob unlocks it with his private key. <b>Both now share the AES key.</b>', animate);
+        addLog('Bob unlocks it with his private key. <b>Both now share the AES key.</b>', ctx.animate);
       },
     },
     {
       caption: 'Now Alice and Bob share a secret key. Alice\'s message is encrypted with AES.',
-      async run(animate) {
+      async run(ctx) {
         highlight('a');
-        data.msg ??= await encryptText(data.key.raw, DEMO_TEXT);
+        const msg = ctx.d.msg ?? await encryptText(ctx.d.key.raw, DEMO_TEXT);
+        ctx.check();
+        ctx.d.msg = msg;
         note('a', `Encrypted <strong>"${DEMO_TEXT}"</strong> with the shared AES key.`);
-        addLog(`Alice encrypts "${DEMO_TEXT}" with AES-128-CBC → ${data.msg.cipher.length} B`, animate);
+        addLog(`Alice encrypts "${DEMO_TEXT}" with AES-128-CBC → ${msg.cipher.length} B`, ctx.animate);
       },
     },
     {
       caption: 'The server only sees ciphertext. Bob decrypts it and reads the message.',
-      async run(animate) {
-        await deliver(data.msg, animate);
+      async run(ctx) {
+        await deliver(ctx.d.msg, ctx);
       },
     },
   ];
 
-  // Steps 6 and "send your own": the encrypted message goes A -> server -> B.
-  async function deliver(msg, animate) {
+  // Step 6 and "send your own": the encrypted message goes A -> server -> B.
+  async function deliver(msg, ctx) {
     setInspector(3, msg.cipher);
-    addLog('Alice → Server: <b>603</b> type 3 (text message)', animate);
-    await hop('a', 's', '603 · 🔒 AES', 'aes', animate);
+    addLog('Alice → Server: <b>603</b> type 3 (text message)', ctx.animate);
+    await hop('a', 's', '603 · 🔒 AES', 'aes', ctx);
     note('s', `Stored for Bob:<br><strong>${hex(msg.cipher, 8)}</strong><br><span class="lock">No AES key: just noise to the server.</span>`);
-    addLog('Server → Alice: <b>2103</b> stored', animate);
-    if (animate) await pause(400);
-    addLog('Bob → Server: <b>604</b> any waiting messages?', animate);
-    await hop('b', 's', '604 · inbox?', 'aes', animate);
-    await hop('s', 'b', '2104 · 🔒 AES', 'aes', animate);
-    const plain = await decryptText(data.aesB, msg);
+    addLog('Server → Alice: <b>2103</b> stored', ctx.animate);
+    if (ctx.animate) { await pause(ctx.fast ? 150 : 400); ctx.check(); }
+    addLog('Bob → Server: <b>604</b> any waiting messages?', ctx.animate);
+    await hop('b', 's', '604 · inbox?', 'aes', ctx);
+    await hop('s', 'b', '2104 · 🔒 AES', 'aes', ctx);
+    const plain = await decryptText(ctx.d.aesB, msg);
+    ctx.check();
     note('b', `Decrypted with the shared AES key:<br><strong>"${escapeHtml(plain)}"</strong>`);
-    addLog(`Bob decrypts it: <b>"${escapeHtml(plain)}"</b>`, animate);
+    addLog(`Bob decrypts it: <b>"${escapeHtml(plain)}"</b>`, ctx.animate);
+  }
+
+  // Errors from a run that Reset made stale are expected and ignored.
+  function report(err, ctx) {
+    if (err instanceof Stale || ctx.stale()) return;
+    addLog(`Something went wrong: ${escapeHtml(err.message)}`, true);
   }
 
   // ---------- rendering the current position ----------
@@ -221,19 +259,20 @@ export function initFlow(root) {
     const started = step > 0;
     root.classList.toggle('running', started);
     btn.start.hidden = started;
-    btn.back.hidden = btn.next.hidden = !started;
+    btn.back.hidden = btn.next.hidden = btn.reset.hidden = !started;
     progress.hidden = !started;
     compose.hidden = step < steps.length;
 
     btn.back.disabled = playing || step <= 1;
     btn.next.disabled = playing || step >= steps.length;
+    btn.send.disabled = playing;
     btn.play.textContent = playing ? 'Pause' : 'Play all';
     btn.play.setAttribute('aria-pressed', String(playing));
 
     progressLabel.textContent = `Step ${step} of ${steps.length}`;
     bars.forEach((bar, i) => bar.classList.toggle('on', i < step));
-    caption.textContent = started ? steps[step - 1].caption : '';
-    if (!started) caption.innerHTML = initial.caption;
+    if (started) caption.textContent = steps[step - 1].caption;
+    else caption.innerHTML = initial.caption;
 
     // Never leave keyboard focus on a button that just got hidden or disabled.
     // (Browsers move focus to <body> as soon as the focused button is hidden.)
@@ -243,78 +282,86 @@ export function initFlow(root) {
     }
   }
 
+  function setBusy(on) {
+    busy = on;
+    if (on) root.setAttribute('aria-busy', 'true');
+    else root.removeAttribute('aria-busy');
+  }
+
   // Show step n. Going forward one step animates it; any other jump rebuilds silently.
   async function goTo(n) {
-    if (busy) return;
+    if (busy || n < 1 || n > steps.length) return;
     const forward = n === step + 1;
-    busy = true;
-    root.setAttribute('aria-busy', 'true');
-    const myRun = run;
+    setBusy(true);
+    const ctx = context(false);
     try {
       if (!forward) {
         clearDiagram();
-        for (let i = 0; i < n - 1; i++) await steps[i].run(false);
+        for (let i = 0; i < n - 1; i++) await steps[i].run(ctx);
       }
       step = n;
       updateControls();
-      await steps[n - 1].run(forward);
+      await steps[n - 1].run({ ...ctx, animate: forward });
     } catch (err) {
-      if (err.message !== 'reset') addLog(`Something went wrong: ${err.message}`, true);
+      report(err, ctx);
     } finally {
-      if (myRun === run) {
-        busy = false;
-        root.removeAttribute('aria-busy');
-      }
+      if (!ctx.stale()) setBusy(false);
     }
   }
 
   async function playAll() {
     if (playing) { playing = false; updateControls(); return; } // acts as "Pause"
-    if (busy) return;
-    if (step >= steps.length) reset();
-    playing = true;
-    updateControls();
     const myRun = run;
     const myPlay = ++playId;
+    playing = true;
+    updateControls();
     const stillPlaying = () => playing && myRun === run && myPlay === playId;
+
+    while (busy && stillPlaying()) await sleep(50); // let a step that's already running finish
+    if (stillPlaying() && step >= steps.length) {   // at the end: start over
+      reset();
+      return playAll();
+    }
     while (stillPlaying() && step < steps.length) {
       const t0 = performance.now();
       await goTo(step + 1);
-      if (step >= steps.length) break;
-      await sleep(Math.max(1200, PLAY_STEP_MS - (performance.now() - t0)));
+      if (!stillPlaying() || step >= steps.length) break;
+      await sleep(Math.max(400, PLAY_STEP_MS - (performance.now() - t0)));
     }
     if (stillPlaying()) { playing = false; updateControls(); }
   }
 
   async function sendOwn(e) {
     e.preventDefault();
+    if (busy || playing || step < steps.length) return;
     const text = input.value.trim();
     if (!text) { input.focus(); return; }
-    if (busy) return;
-    busy = true;
-    const myRun = run;
+    setBusy(true);
+    const ctx = context(true);
     try {
       caption.textContent = 'Your message takes the same path: Alice encrypts it, the server only stores ciphertext, Bob decrypts it.';
       highlight('a');
-      const msg = await encryptText(data.key.raw, text);
+      const msg = await encryptText(ctx.d.key.raw, text);
+      ctx.check();
       note('a', `Encrypted <strong>"${escapeHtml(text)}"</strong> with the shared AES key.`);
       addLog(`Alice encrypts "${escapeHtml(text)}" with AES-128-CBC → ${msg.cipher.length} B`, true);
       await pause(600);
-      await deliver(msg, true);
+      ctx.check();
+      await deliver(msg, ctx);
     } catch (err) {
-      if (err.message !== 'reset') addLog(`Something went wrong: ${err.message}`, true);
+      report(err, ctx);
     } finally {
-      if (myRun === run) busy = false;
+      if (!ctx.stale()) setBusy(false);
     }
   }
 
+  // Back to the start. Bumping `run` makes any running step or "Play all" loop stop.
   function reset() {
     run++;
-    busy = false;
     playing = false;
     step = 0;
     data = {};
-    root.removeAttribute('aria-busy');
+    setBusy(false);
     clearDiagram();
     updateControls();
   }

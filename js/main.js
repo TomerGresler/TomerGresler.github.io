@@ -1,10 +1,8 @@
 // Entry point: wires up every interactive piece of the page.
-import { initTheme } from './theme.js';
 import { initTyping } from './typing.js';
 import { initReveal } from './reveal.js';
 import { initFlow } from './flow.js';
 
-initTheme(document.querySelector('.theme-toggle'));
 initTyping(document.querySelector('.typing-text'), ['C', 'Python', 'Networking', 'REST APIs']);
 initReveal(document.querySelectorAll('.reveal'));
 initFlow(document.querySelector('.flow'));

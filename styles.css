@@ -1,6 +1,6 @@
 /* =========================================================
    Tomer Gresler · portfolio styles
-   One accent color, dark by default, light via [data-theme].
+   One accent color, always dark.
    ========================================================= */
 
 /* ---------- Design tokens ---------- */
@@ -28,25 +28,6 @@
   --maxw: 1120px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   color-scheme: dark;
-}
-
-[data-theme="light"] {
-  --bg: #f7f8fb;
-  --bg-elev: #ffffff;
-  --surface: rgba(15, 23, 42, 0.03);
-  --surface-hover: rgba(15, 23, 42, 0.055);
-  --border: rgba(15, 23, 42, 0.1);
-  --border-strong: rgba(15, 23, 42, 0.18);
-  --text: #0f172a;
-  --text-muted: #4b5565;
-  --accent: #0f766e;
-  --accent-strong: #0d9488;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(13, 148, 136, 0.1);
-  --glow: rgba(13, 148, 136, 0.16);
-  --danger: #b91c1c;
-  --shadow: 0 20px 45px -25px rgba(15, 23, 42, 0.25);
-  color-scheme: light;
 }
 
 /* ---------- Base ---------- */
@@ -145,17 +126,6 @@ svg.fill { fill: currentColor; stroke: none; }
   padding: 0.45rem 0.75rem; border-radius: 8px; transition: color 0.2s, background-color 0.2s;
 }
 .nav-links a:hover, .nav-links a.active { color: var(--text); background: var(--surface-hover); }
-
-.theme-toggle {
-  display: grid; place-items: center; width: 40px; height: 40px;
-  border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
-  color: var(--text); cursor: pointer; transition: background-color 0.2s, border-color 0.2s;
-}
-.theme-toggle:hover { background: var(--surface-hover); border-color: var(--border-strong); }
-.theme-toggle svg { width: 18px; height: 18px; }
-.icon-moon { display: none; }
-[data-theme="light"] .icon-sun { display: none; }
-[data-theme="light"] .icon-moon { display: block; }
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -283,7 +253,7 @@ svg.fill { fill: currentColor; stroke: none; }
 .node-note strong { color: var(--text); font-weight: 600; }
 .node-note .lock { color: var(--danger); }
 
-.wire { height: 2px; background: repeating-linear-gradient(90deg, var(--border-strong) 0 6px, transparent 6px 12px); transition: background 0.3s; }
+.wire { position: relative; height: 2px; background: repeating-linear-gradient(90deg, var(--border-strong) 0 6px, transparent 6px 12px); transition: background 0.3s; }
 .wire.active {
   background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px);
   background-size: 24px 2px; animation: dash 0.6s linear infinite;
@@ -291,6 +261,17 @@ svg.fill { fill: currentColor; stroke: none; }
 }
 .wire.lit { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px); }
 @keyframes dash { to { background-position: 24px 0; } }
+/* Before the demo starts: a small packet drifts back and forth on each wire */
+.idle-dot {
+  position: absolute; left: 0; top: 50%; width: 8px; height: 8px; margin-top: -4px;
+  border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent), 0 0 20px var(--glow);
+  animation: idle-x 2.6s ease-in-out infinite alternate;
+}
+[data-wire="bc"] .idle-dot { animation-delay: -1.3s; }
+.flow.running .idle-dot { display: none; }
+@keyframes idle-x { from { left: 0; } to { left: calc(100% - 8px); } }
+@keyframes idle-y { from { top: 0; } to { top: calc(100% - 8px); } }
+
 .flow.running .node { opacity: 0.45; transition: opacity 0.3s, border-color 0.3s, box-shadow 0.3s; }
 .flow.running .node.active { opacity: 1; }
 
@@ -316,6 +297,16 @@ svg.fill { fill: currentColor; stroke: none; }
 .flow-bars i { width: 22px; height: 4px; border-radius: 2px; background: var(--border-strong); transition: background-color 0.3s; }
 .flow-bars i.on { background: var(--accent); }
 .flow-caption { font-size: clamp(1.05rem, 2.2vw, 1.25rem); font-weight: 600; letter-spacing: -0.01em; }
+
+/* Idle state: intro line and a big Start button, centered under the diagram */
+.flow:not(.running) .flow-narration { text-align: center; min-height: 0; }
+.flow:not(.running) .flow-caption { max-width: 34rem; margin-inline: auto; }
+.flow:not(.running) .flow-controls { flex-direction: column; justify-content: center; }
+.flow:not(.running) .flow-spacer { display: none; }
+
+/* Log and byte panel only appear once the demo is running */
+.flow:not(.running) .flow-bottom { display: none; }
+.flow.running .flow-bottom { animation: fadein 0.5s var(--ease); }
 
 .flow-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; margin-top: 1.1rem; }
 .flow-controls [hidden] { display: none; }
@@ -490,7 +481,9 @@ svg.fill { fill: currentColor; stroke: none; }
   }
   .node { min-height: 0; }
   /* Controls: Back | Next on one row, Play all | Reset on the next */
-  .flow-controls { display: grid; grid-template-columns: 1fr 1fr; }
+  .flow.running .flow-controls { display: grid; grid-template-columns: 1fr 1fr; }
+  .flow:not(.running) .flow-controls { align-items: stretch; }
+  .idle-dot { left: 50%; top: 0; margin: 0 0 0 -4px; animation-name: idle-y; }
   .flow-controls [data-action="start"] { grid-column: 1 / -1; }
   .flow-spacer { display: none; }
   .flow-compose-row .btn { flex: 1 1 100%; }
@@ -511,4 +504,8 @@ svg.fill { fill: currentColor; stroke: none; }
   }
   .js .reveal { opacity: 1; transform: none; }
   .caret { animation: none; }
+  .idle-dot { animation: none !important; left: calc(50% - 4px); }
+}
+@media (prefers-reduced-motion: reduce) and (max-width: 760px) {
+  .idle-dot { left: 50%; top: calc(50% - 4px); }
 }

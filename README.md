@@ -10,9 +10,8 @@ except Google Fonts. GitHub Pages serves the files from `main` as they are.
 | File | What it does |
 |------|--------------|
 | `index.html` | All page content and the SEO / Open Graph meta tags. |
-| `styles.css` | Design tokens (colors, fonts) at the top, then one block per section. Dark theme by default, light theme under `[data-theme="light"]`. |
+| `styles.css` | Design tokens (colors, fonts) at the top, then one block per section. The site is always dark. |
 | `js/main.js` | Entry point. Starts every module, plus the sticky header, card hover glow and "copy email". |
-| `js/theme.js` | Dark / light toggle, saved in `localStorage`. |
 | `js/typing.js` | The typing effect in the hero. |
 | `js/reveal.js` | Fades sections in on scroll with `IntersectionObserver`. |
 | `js/flow.js` | The interactive MessageU diagram (Client A → Server → Client B). |
