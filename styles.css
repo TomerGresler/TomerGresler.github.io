@@ -300,7 +300,11 @@ svg.fill { fill: currentColor; stroke: none; }
 
 /* Idle state: intro line and a big Start button, centered under the diagram */
 .flow:not(.running) .flow-narration { text-align: center; min-height: 0; }
-.flow:not(.running) .flow-caption { max-width: 34rem; margin-inline: auto; }
+.flow:not(.running) .flow-caption {
+  max-width: 34rem; margin-inline: auto;
+  /* same look as the section description (.lead) */
+  font-size: 1.1rem; font-weight: 400; letter-spacing: normal; color: var(--text-muted);
+}
 .flow:not(.running) .flow-controls { flex-direction: column; justify-content: center; }
 .flow:not(.running) .flow-spacer { display: none; }
 
