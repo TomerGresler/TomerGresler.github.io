@@ -129,13 +129,15 @@ svg.fill { fill: currentColor; stroke: none; }
 .site-header.scrolled { border-bottom-color: var(--border); }
 
 .nav { display: flex; align-items: center; gap: 1.5rem; height: 64px; }
-.brand { text-decoration: none; margin-right: auto; }
-.brand-mark {
-  display: grid; place-items: center; width: 38px; height: 38px;
-  border-radius: 10px; font-weight: 800; font-size: 0.9rem; letter-spacing: 0.02em;
-  color: var(--accent-ink);
-  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 0 24px var(--glow);
+.brand {
+  display: inline-flex; align-items: center; gap: 0.6rem; margin-right: auto;
+  font-weight: 700; font-size: 1.08rem; letter-spacing: -0.02em; white-space: nowrap;
+  text-decoration: none; color: var(--text); transition: color 0.2s;
+}
+.brand:hover { color: var(--accent); }
+.brand-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex: none;
+  background: var(--accent); box-shadow: 0 0 12px var(--glow), 0 0 4px var(--accent);
 }
 .nav-links { display: flex; gap: 0.25rem; }
 .nav-links a {
@@ -177,11 +179,6 @@ svg.fill { fill: currentColor; stroke: none; }
 .btn-text { border-color: transparent; background: none; color: var(--text-muted); }
 .btn-text:hover { color: var(--text); }
 .btn-lg { min-height: 54px; font-size: 1.05rem; padding-inline: 1.6rem; }
-.btn.pulse { animation: pulse 1.8s var(--ease) infinite; }
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--glow); }
-  50% { box-shadow: 0 0 0 8px transparent; }
-}
 
 /* ---------- Hero ---------- */
 .hero {
@@ -292,7 +289,10 @@ svg.fill { fill: currentColor; stroke: none; }
   background-size: 24px 2px; animation: dash 0.6s linear infinite;
   box-shadow: 0 0 12px var(--glow);
 }
+.wire.lit { background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 12px); }
 @keyframes dash { to { background-position: 24px 0; } }
+.flow.running .node { opacity: 0.45; transition: opacity 0.3s, border-color 0.3s, box-shadow 0.3s; }
+.flow.running .node.active { opacity: 1; }
 
 .packet {
   position: absolute; left: 0; top: 0; z-index: 3;
@@ -305,10 +305,25 @@ svg.fill { fill: currentColor; stroke: none; }
 }
 .packet.rsa { background: var(--text); color: var(--bg); box-shadow: 0 0 0 4px var(--surface-hover), 0 0 24px var(--glow); }
 
-.flow-controls {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem;
+/* Step caption + progress, right under the diagram */
+.flow-narration {
   margin-top: 1.75rem; padding-top: 1.5rem; border-top: 1px solid var(--border);
+  min-height: 5.2rem;
 }
+.flow-progress { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 0.45rem; font-size: 0.8rem; color: var(--accent); }
+.flow-progress[hidden] { display: none; }
+.flow-bars { display: flex; gap: 4px; }
+.flow-bars i { width: 22px; height: 4px; border-radius: 2px; background: var(--border-strong); transition: background-color 0.3s; }
+.flow-bars i.on { background: var(--accent); }
+.flow-caption { font-size: clamp(1.05rem, 2.2vw, 1.25rem); font-weight: 600; letter-spacing: -0.01em; }
+
+.flow-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; margin-top: 1.1rem; }
+.flow-controls [hidden] { display: none; }
+.flow-spacer { flex: 1; }
+.flow-compose { margin-top: 1.25rem; }
+.flow-compose[hidden] { display: none; }
+.flow-compose label { display: block; font-size: 0.9rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+.flow-compose-row { display: flex; flex-wrap: wrap; gap: 0.7rem; }
 .flow-input {
   flex: 1 1 200px; min-width: 0; min-height: 46px; padding: 0 1rem;
   font: 500 0.92rem var(--font-mono); color: var(--text);
@@ -468,12 +483,18 @@ svg.fill { fill: currentColor; stroke: none; }
     width: 2px; height: 100%; justify-self: center;
     background: repeating-linear-gradient(180deg, var(--border-strong) 0 6px, transparent 6px 12px);
   }
+  .wire.lit { background: repeating-linear-gradient(180deg, var(--accent) 0 6px, transparent 6px 12px); }
   .wire.active {
     background: repeating-linear-gradient(180deg, var(--accent) 0 6px, transparent 6px 12px);
     background-size: 2px 24px; animation-name: dash-v;
   }
   .node { min-height: 0; }
-  .flow-controls .btn { flex: 1 1 auto; }
+  /* Controls: Back | Next on one row, Play all | Reset on the next */
+  .flow-controls { display: grid; grid-template-columns: 1fr 1fr; }
+  .flow-controls [data-action="start"] { grid-column: 1 / -1; }
+  .flow-spacer { display: none; }
+  .flow-compose-row .btn { flex: 1 1 100%; }
+  .brand { font-size: 1rem; }
 }
 @keyframes dash-v { to { background-position: 0 24px; } }
 

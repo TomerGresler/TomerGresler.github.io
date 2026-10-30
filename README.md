@@ -22,18 +22,25 @@ except Google Fonts. GitHub Pages serves the files from `main` as they are.
 
 ## The MessageU demo
 
-1. **Exchange key**: Alice asks the server for Bob's public key (request 602), makes a random AES key,
-   wraps it with Bob's RSA public key and sends it (603, message type 2). Bob pulls it (604) and unwraps it
-   with his private key.
-2. **Send message**: Alice encrypts the text with the shared AES key and sends it (603, type 3). The server
-   stores only ciphertext. Bob pulls it and decrypts it.
+A six-step walkthrough. Press **Start demo**, then **Next** (or **Back**) to move one step at a time,
+or **Play all** to run it automatically. Each step highlights only the active box and shows a short caption:
+
+1. Alice asks the server for Bob's public key (request 602).
+2. Alice makes a random AES key and locks it with Bob's RSA public key.
+3. She sends it (603, message type 2). The server stores it but can't open it.
+4. Bob pulls his messages (604) and unlocks the AES key with his private key.
+5. Alice encrypts a message with the shared AES key.
+6. The message goes through the server as ciphertext (603, type 3), and Bob decrypts it.
+
+After the last step you can type your own message and send it. The protocol log and the byte
+layout panel update together with each step.
 
 The request codes and packet layout match the real [MessageU](https://github.com/TomerGresler/MessageU) protocol.
 
 ## Accessibility and performance
 
 - Keyboard friendly: skip link, visible focus rings, every control is a real button or link.
-- Respects `prefers-reduced-motion`: animations are switched off and the demo doesn't start by itself.
+- Respects `prefers-reduced-motion`: animations are switched off. The step caption is announced with `aria-live`.
 - Lighthouse (mobile and desktop): 100 performance, 100 accessibility, 100 best practices, 100 SEO.
 
 ## Run locally

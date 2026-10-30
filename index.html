@@ -48,8 +48,8 @@
 
   <header class="site-header">
     <nav class="nav container" aria-label="Main">
-      <a class="brand" href="#top">
-        <span class="brand-mark" aria-hidden="true">TG</span><span class="sr-only">Tomer Gresler, back to top</span>
+      <a class="brand" href="#top" aria-label="Tomer Gresler, back to top">
+        <span class="brand-dot" aria-hidden="true"></span>Tomer Gresler
       </a>
       <ul class="nav-links">
         <li><a href="#demo">Demo</a></li>
@@ -95,11 +95,11 @@
     <!-- ============ MESSAGEU DEMO ============ -->
     <section class="section container" id="demo" aria-labelledby="demo-title">
       <header class="section-head reveal">
-        <p class="kicker">Interactive · MessageU</p>
-        <h2 id="demo-title">End-to-end encryption, step by step</h2>
-        <p class="lead">How a message travels in <a href="https://github.com/TomerGresler/MessageU" target="_blank" rel="noopener">MessageU</a>.
-          The clients first share an AES key, wrapped with RSA. After that, every message passes through the server as ciphertext it can't read.
-          The encryption below is real. It runs in your browser with the Web Crypto API.</p>
+        <p class="kicker">Featured project · MessageU</p>
+        <h2 id="demo-title">MessageU: encrypted messaging, step by step</h2>
+        <p class="lead"><a href="https://github.com/TomerGresler/MessageU" target="_blank" rel="noopener">MessageU</a> is a messaging app I built:
+          a Python server passes messages between C++ clients, encrypted end to end so even the server can't read them.
+          Try it below, it's real encryption running in your browser.</p>
       </header>
 
       <div class="flow reveal">
@@ -140,17 +140,35 @@
           <div class="packet" aria-hidden="true"><span class="packet-label"></span></div>
         </div>
 
+        <!-- Caption for the current step; announced to screen readers -->
+        <div class="flow-narration" aria-live="polite" aria-atomic="true">
+          <div class="flow-progress" data-progress hidden>
+            <span class="mono" data-step-label>Step 1 of 6</span>
+            <span class="flow-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          </div>
+          <p class="flow-caption" data-caption>Six short steps show how two clients agree on a secret key and send a message the server can't read.</p>
+        </div>
+
         <div class="flow-controls">
-          <button class="btn btn-primary" type="button" data-action="exchange">1 · Exchange key</button>
-          <label class="sr-only" for="flow-msg">Message to send</label>
-          <input id="flow-msg" class="flow-input" type="text" maxlength="60" value="Hi Bob, lunch at 1?" autocomplete="off">
-          <button class="btn btn-ghost" type="button" data-action="send" disabled>2 · Send message</button>
+          <button class="btn btn-primary" type="button" data-action="start">Start demo</button>
+          <button class="btn btn-ghost" type="button" data-action="back" hidden>← Back</button>
+          <button class="btn btn-primary" type="button" data-action="next" hidden>Next →</button>
+          <span class="flow-spacer"></span>
+          <button class="btn btn-text" type="button" data-action="play" aria-pressed="false">Play all</button>
           <button class="btn btn-text" type="button" data-action="reset">Reset</button>
         </div>
 
+        <form class="flow-compose" data-compose hidden>
+          <label for="flow-msg">Now send your own message from Alice to Bob</label>
+          <div class="flow-compose-row">
+            <input id="flow-msg" class="flow-input" type="text" maxlength="60" placeholder="Type a message…" autocomplete="off">
+            <button class="btn btn-primary" type="submit">Send message</button>
+          </div>
+        </form>
+
         <div class="flow-bottom">
-          <ol class="flow-log mono" aria-live="polite" aria-label="Protocol log">
-            <li class="muted">Press "Exchange key" to start.</li>
+          <ol class="flow-log mono" aria-label="Protocol log">
+            <li class="muted">The protocol messages will appear here, one step at a time.</li>
           </ol>
           <div class="inspector mono" aria-label="Last packet on the wire">
             <p class="inspector-title">Request 603 on the wire</p>
